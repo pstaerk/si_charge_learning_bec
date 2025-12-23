@@ -1,0 +1,8 @@
+model:
+  model.Critias:
+    cutoff: 6.5
+    max_degree: 3
+baseline:
+  elemental:
+    1: -187.71912230721637
+    8: -93.85956115360801

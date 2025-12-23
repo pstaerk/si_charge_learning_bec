@@ -1,0 +1,25 @@
+# train: "/work/pstaerk/datasets_ml/bulk_and_interface/train"
+# valid: "/work/pstaerk/datasets_ml/bulk_and_interface/valid"
+# train: "/work/pstaerk_m3/pyiron/ml_nacl/datasets_ml/bingqing_finite_apt/train"
+# valid: "/work/pstaerk_m3/pyiron/ml_nacl/datasets_ml/bingqing_finite_apt/valid"
+train: "/work/pstaerk_m3/pyiron/ml_nacl/datasets_ml/water_clusters/train"
+valid: "/work/pstaerk_m3/pyiron/ml_nacl/datasets_ml/water_clusters/valid"
+chunk_size: 2
+num_graphs: 2
+num_nodes: 1567
+num_edges: 160000
+# num_nodes: 385
+# num_edges: 28000
+loss_weights: {"energy": 1.0, "forces": 1.0, "apt": 1.}
+scale_by_variance: False
+start_learning_rate: 1e-4
+min_learning_rate: 1e-6
+max_epochs: 2000
+valid_every_epoch: 2
+decay_style: "linear"
+start_decay_after: 10
+# modify for testing
+use_wandb: True
+worker_count: 2
+worker_buffer_size: 1
+neutralize_charge: False

@@ -1,0 +1,8 @@
+jax[cuda12]  # replace cuda with you requirements
+e3x
+matplotlib
+mmap_ninja
+ase
+grain
+git+https://github.com/lab-cosmo/jax-pme.git
+git+https://github.com/sirmarcel/marathon
