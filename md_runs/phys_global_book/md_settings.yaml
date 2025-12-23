@@ -1,0 +1,14 @@
+io_definitions:
+  model_checkpoint: '../../checkpoints/phys_lr_only/run/checkpoints/R2_E+F/'
+  model_definition: '../../model_definitions/phys_lr_only/'
+  start_struct: '../../start_structs/book.xyz'
+  start_index: 0
+  # out_path: '/work/pstaerk/md_runs_ml/physical_ii_global_hex_book_com/traj.traj'
+  out_path: 'output/traj.traj'
+md_definitions:
+  timestep: 0.5 # in fs
+  steps_per_frame: 1
+  temperature: 300
+  total_steps: 2_000_000
+  screen_fac: 
+  field_vector: [0,0,0.]

@@ -1,0 +1,2 @@
+model with best summed mae of forces on split valid at epoch=4966962:
+-> loss=3.9508548737e+01
