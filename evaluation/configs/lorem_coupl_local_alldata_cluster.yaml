@@ -1,0 +1,30 @@
+# Model configuration
+checkpoint_folder: '../training_runs/lorem_ii_cluster_bulk_td/run/checkpoints/R2_E+F+A/'
+model_definitions: '../lorem_ii/'
+
+# Data paths
+# validation_data_path: '/work/amam/cps2815/datasets_ml/water_clusters/valid'
+validation_data_path: '/work/pstaerk/datasets_ml/water_clusters/valid'
+# output_path: '/work/amam/cps2815/outs/lorem_ii_alldata_clusters/'
+output_path: '/work/pstaerk/outs/lorem_ii_alldata_clusters/'
+
+# Model parameters
+cutoff: 5.0
+field: null
+predict_i: false
+
+# Batching parameters
+num_edges: 150000
+num_nodes: 5000
+num_graphs: 2
+batch_style: 'batch_shape'
+
+# Ewald parameters
+lr_wavelength_factor: 8.0
+smearing_factor: 4.0
+
+# Other parameters
+stress: false
+apt: true
+prefetch_size: 2
+output_screen: true
