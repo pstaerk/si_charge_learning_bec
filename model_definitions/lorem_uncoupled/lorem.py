@@ -6,13 +6,14 @@ from flax.core import FrozenDict
 import flax.linen as nn
 import e3x
 
+from jaxtyping import Array, Bool, Float, Int, Num, Shaped
 import functools
 from collections.abc import Sequence
 
 from jaxpme import Ewald
 import jaxpme
 
-from myrto.utils.safe import masked
+# from myrto.utils.safe import masked
 
 
 class Lorem(nn.Module):
@@ -637,3 +638,17 @@ def acoustic_sum_rule(apts):
     # apts: (nr_batches, N, 3, 3), want (nr_batches, 3)
     excess_charge = jnp.einsum("...nij->...ij", apts)  # sum over i
     return excess_charge
+
+def masked(
+    fn: callable,
+    x: Shaped[Array, "*shared features"],
+    mask: Bool[Array, " *shared"],
+    fn_value: float = 0.0,  # value to be passed into fn
+    return_value: float = 0.0,  # value to be returned
+):
+    fn_value = jnp.array(fn_value, dtype=x.dtype)
+    return_value = jnp.array(return_value, dtype=x.dtype)
+
+    return jnp.where(
+        mask[..., None], fn(jnp.where(mask[..., None], x, fn_value)), return_value
+    )
