@@ -3,7 +3,7 @@ io_definitions:
   model_definition: '../../model_definitions/phys_uncoupled/'
   start_struct: '../../start_structs/book.xyz'
   start_index: 0
-  # out_path: '/work/pstaerk/md_runs_ml/physical_i_hex_book_com/traj.traj'
+  # out_path: './output/traj.traj'
   out_path: 'output/traj.traj'
 md_definitions:
   timestep: 0.5 # in fs
