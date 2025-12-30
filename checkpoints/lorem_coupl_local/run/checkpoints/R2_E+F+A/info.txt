@@ -1,0 +1,2 @@
+model with best summed r2 of energy + forces + apt on split valid at epoch=1933932:
+-> loss=-2.9646472168e+02
