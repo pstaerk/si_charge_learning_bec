@@ -19,7 +19,7 @@ mkdir -p logs
 SEEDS=(42 123 456 789 1024 10 11 12 13 14 15 16)
 SEED=${SEEDS[$SLURM_ARRAY_TASK_ID]}
 
-BASE_OUT_DIR="/work/pstaerk/md_runs_ml/lorem_uncoupled_book_com"
+BASE_OUT_DIR="/work/pstaerk/md_runs_ml/lorem_uncoupled_cage_com"
 OUT_DIR="${BASE_OUT_DIR}/seed_${SEED}"
 
 echo "Running simulation with seed ${SEED}"
