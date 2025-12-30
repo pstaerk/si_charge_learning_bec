@@ -1,0 +1,12 @@
+io_definitions:
+  model_checkpoint: '../../checkpoints/lorem_coupl_local/run/checkpoints/R2_E+F+A/'
+  model_definition: '../../model_definitions/lorem_coupl_local/'
+  start_struct: '../../start_structs/cage.xyz'
+  start_index: 0
+  out_path: '/work/pstaerk_m3/md_runs_ml/lorem_coupl_local_hex_cage_com/traj.traj'
+md_definitions:
+  timestep: 0.5 # in fs
+  steps_per_frame: 1
+  temperature: 10
+  total_steps: 50_000
+  field_vector: [0,0,0.]
