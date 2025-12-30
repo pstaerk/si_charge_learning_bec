@@ -1,9 +1,8 @@
 io_definitions:
-  model_checkpoint: '../../checkpoints/phys_lr_only/run/checkpoints/R2_E+F/'
-  model_definition: '../../model_definitions/phys_lr_only/'
+  model_checkpoint: '../../checkpoints/lorem_lr_only/run/checkpoints/R2_E+F/'
+  model_definition: '../../model_definitions/lorem_lr_only/'
   start_struct: '../../start_structs/cage.xyz'
   start_index: 0
-  #out_path: '/work/pstaerk/md_runs_ml/physical_ii_global_hex_cage_test/traj.traj'
   out_path: 'output/traj.traj'
 md_definitions:
   timestep: 0.5 # in fs

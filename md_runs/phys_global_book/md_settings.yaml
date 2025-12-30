@@ -8,7 +8,7 @@ io_definitions:
 md_definitions:
   timestep: 0.5 # in fs
   steps_per_frame: 1
-  temperature: 300
-  total_steps: 2_000_000
+  temperature: 10
+  total_steps: 50_000
   screen_fac: 
   field_vector: [0,0,0.]
