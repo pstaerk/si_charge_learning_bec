@@ -90,6 +90,8 @@ def z_i_alpha_beta_npbc(params, batch):
     """Calculate the z_i_alpha_beta for non-periodic boundary conditions.
     This is a dummy function that does not use the periodicity of the system.
     """
+    pol_fun = lambda p, b, a: pol_function_npbc(p, b, a, apply_fn)
+    deriv_p_npbc = jax.value_and_grad(pol_fun, has_aux=False,
     deriv_p_npbc = jax.value_and_grad(pol_function_npbc, has_aux=False,
                                             argnums=1, allow_int=True)
     z_i_ab = jnp.zeros((batch.positions.shape[0], 3, 3), dtype=jnp.float32)

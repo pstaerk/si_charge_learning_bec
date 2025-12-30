@@ -203,18 +203,16 @@ class Calculator(GetPropertiesMixin):
         electric_field = (jnp.array(kwargs['field'], dtype=jnp.float32)
                           if kwargs['field'] is not None else None)
 
-        from predict import get_predict_fn
+        # from predict import get_predict_fn
 
         electric_field = (jnp.array(kwargs['field'], dtype=jnp.float32)
                           if kwargs['field'] is not None else None)
 
-        predict_fn = get_predict_fn(model.apply, electrostatics='ewald',
-                                    electric_field=electric_field,
-                                    )
+        predict_fn = lambda p, b: model.predict(p, b,
+                                                electric_field=electric_field)
    
         # Create a fully reduced calc_apt_fn that only takes params and batch
         def calc_apt_fn_reduced(p, b):
-            # Create the calc_q function with model.apply bound
             return z_i_alpha_beta_npbc(p, b, model.apply)
 
         return cls(predict_fn, species_to_weight, params, model.cutoff,
