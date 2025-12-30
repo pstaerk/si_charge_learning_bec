@@ -1,5 +1,3 @@
-import yaml
-from myrto.engine import read_yaml
 import sys
 import pathlib
 import numpy as np
@@ -8,6 +6,7 @@ import os
 from rich.panel import Panel
 from rich.table import Table
 from rich.console import Console
+from marathon.io import read_yaml
 
 # Parse command line arguments for seed and output directory override
 import argparse
@@ -19,6 +18,7 @@ parser.add_argument('--out-dir', type=str, default=None,
 args = parser.parse_args()
 
 md_settings = read_yaml("md_settings.yaml")
+
 checkpoint = md_settings['io_definitions']['model_checkpoint']
 model_definitions = md_settings['io_definitions']['model_definition']
 
@@ -31,7 +31,7 @@ from ase.io import read, write
 from ase.md.bussi import Bussi
 from ase import units
 from ase.io.trajectory import Trajectory
-from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
+from ase.md.velocitydistribution import MaxwellBoltzmannDistribution, ZeroRotation
 from rich.progress import track
 from calculator import Calculator
 import glob
@@ -77,6 +77,21 @@ def get_dipole_moment_derivative(atoms):
     
     return dM_dt
 
+
+def remove_com(atoms):
+    """Set the positions such that the COM is at the origin."""
+    current_com = atoms.get_center_of_mass()
+    positions = atoms.get_positions()
+    new_positions = positions - current_com
+    atoms.set_positions(new_positions)
+
+
+def remove_com_velocity(atoms):
+    """Set the velocities such that the COM velocity is zero."""
+    current_com_velocity = atoms.get_momenta().sum(axis=0) / atoms.get_masses().sum()
+    velocities = atoms.get_velocities()
+    new_velocities = velocities - current_com_velocity
+    atoms.set_velocities(new_velocities)
 
 io_definitions = md_settings['io_definitions']
 md_definitions = md_settings['md_definitions']
@@ -130,6 +145,12 @@ temperature = md_definitions.get('temperature', 300)
 thermostat_tau = md_definitions.get('thermostat_tau', 100) * units.fs
 total_steps = md_definitions.get('total_steps', 10000)
 steps_per_frame = md_definitions.get('steps_per_frame', 2000)
+com_removal_interval = md_definitions.get('com_removal_interval', 1)  # Remove COM drift every N steps
+com_velocity_removal_interval = md_definitions.get('com_velocity_removal_interval', 100)  # Remove COM velocity every N steps
+
+from rich.panel import Panel
+from rich.table import Table
+from rich.console import Console
 
 # Create a table for the MD parameters
 table = Table.grid(expand=True, padding=(0, 1))
@@ -159,6 +180,7 @@ panel = Panel(
 )
 
 # Print the panel
+console = Console()
 console.print(panel)
 
 # Initialize APT arrays if not present
@@ -174,9 +196,11 @@ atoms.calc = calc
 if args.seed is not None:
     console.print(f"[cyan]Initializing velocities with seed {args.seed}[/cyan]")
     MaxwellBoltzmannDistribution(atoms, temperature_K=temperature, rng=np.random.RandomState(args.seed))
+    ZeroRotation(atoms)
 else:
     console.print("[cyan]Initializing velocities with random seed[/cyan]")
     MaxwellBoltzmannDistribution(atoms, temperature_K=temperature)
+    ZeroRotation(atoms)
 
 dyn = Bussi(atoms, timestep, temperature, thermostat_tau)
 
@@ -194,6 +218,13 @@ dyn.attach(apt_writer, interval=N_per_step)
 # Add dipole moment derivative writer
 dipole_deriv_writer = BinaryPropertyWriter(str(dipole_output), get_dipole_moment_derivative, atoms)
 dyn.attach(dipole_deriv_writer, interval=N_per_step)
+
+
+# Attach COM motion remover
+dyn.attach(remove_com, interval=com_removal_interval, atoms=atoms)
+dyn.attach(remove_com_velocity, interval=com_velocity_removal_interval,
+           atoms=atoms)
+dyn.attach(ZeroRotation, interval=1, atoms=atoms)
 
 dyn.run(N_per_step*N_steps)
 
