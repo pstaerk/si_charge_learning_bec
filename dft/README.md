@@ -6,8 +6,9 @@ DFT calculations were performed with CP2K. To set up CP2K, please refer to the
 It is probably best to use a virtual environment (production ran with
 Python 3.12.12).
 
-You also need to build a version of pycp2k from the current cp2k input
-(production ran with CP2K version 2025.1):
+You also need to build a version of pycp2k from the current cp2k input. See 
+[pycp2k manual installation](https://github.com/SINGROUP/pycp2k?tab=readme-ov-file#manual)
+for instructions. (production ran with CP2K version 2025.1):
 
 The script `cp2k_run.ipynb` does all the DFT calculations needed for the
 reference data, including external field calculations. It also includes
