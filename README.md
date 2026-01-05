@@ -2,12 +2,12 @@
 
 [![arXiv](https://img.shields.io/badge/arXiv-XXXX.XXXXX-B31B1B.svg)](https://arxiv.org/abs/XXXX.XXXXX)
 [![Materials
-Cloud](https://img.shields.io/badge/Materials%20Cloud-10.24435/materialscloud:23--99-AACAFB.svg)](https://doi.org/10.24435/materialscloud:23-99)
+Cloud](https://img.shields.io/badge/Materials%20Cloud-10.24435/materialscloud:23--99-AACAFB.svg)](https://doi.org/10.24435/materialscloud:nc-fa)
 
 This repository includes all codes and input files used for the work "Simultaneous Learning of Static and Dynamic Charges" available at
 https://arxiv.org/abs/XXXX.XXXXX.
 
-The dataset used for training and validation is available at https://doi.org/10.24435/materialscloud:23-99.
+The dataset used for training and validation is available at https://doi.org/10.24435/materialscloud:nc-fa.
 
 ## Installation Instructions
 

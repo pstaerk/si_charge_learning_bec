@@ -137,12 +137,12 @@ def plot_scrum():
         )
 
     ax[0].plot(bulk_exp[:, 0], bulk_exp[:, 3], "k", ls="--", label="Experiment")
-    ax[-1].set_xlabel(r"$\nu$ [Thz]")
+    ax[-1].set_xlabel(r"$\omega$ [Thz]")
     secax = ax[0].secondary_xaxis(
         "top", functions=(thz_to_wavenumber, wavenumber_to_thz)
     )
 
-    secax.set_xlabel(r"$\nu$ [cm$^{-1}$]")
+    secax.set_xlabel(r"$\omega$ [cm$^{-1}$]")
 
     for a in ax:
         a.set(
