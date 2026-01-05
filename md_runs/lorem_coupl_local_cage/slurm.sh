@@ -10,7 +10,7 @@
 
 eval "$(conda shell.bash hook)"
 # Activate your environment
-conda activate myrto
+conda activate marathon
 
 mkdir -p logs
 
