@@ -1,0 +1,10 @@
+model:
+  path: "../../model_definitions/lorem_uncoupled/lorem.py"
+  model_name: "Lorem"
+  cutoff: 5.0
+  num_message_passing: 0
+  max_degree_lr: 0
+baseline:
+  elemental:
+    1: -187.71912230721637
+    8: -93.85956115360801

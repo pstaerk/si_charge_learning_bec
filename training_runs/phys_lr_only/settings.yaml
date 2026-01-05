@@ -1,0 +1,21 @@
+train_pbc: "../../training_structures/pbc_structures/train"
+valid_pbc: "../../training_structures/pbc_structures/valid"
+train_npbc: "../../training_structures/npbc_structures/train"
+valid_npbc: "../../training_structures/npbc_structures/valid"
+chunk_size: 1
+num_graphs: 2
+num_nodes: 385
+num_edges: 28000
+loss_weights: {"energy": 1.0, "forces": 1.0}
+scale_by_variance: False
+start_learning_rate: 6e-5
+min_learning_rate: 1e-6
+max_epochs: 2000
+valid_every_epoch: 2
+decay_style: "linear"
+start_decay_after: 10
+# modify for testing
+use_wandb: False
+worker_count: 2
+worker_buffer_size: 1
+neutralize_charge: False
