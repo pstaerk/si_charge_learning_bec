@@ -13,6 +13,8 @@ pip install -r requirements.txt
  - `model_definitions`: Definitions of models, including model specific batching and ase calculators
  - `start_structs`: Starting structures of the md runs.
  - `evaluation`: Contains scripts for testing the models on the validation set.
+ - `training_runs`: Contains configuration and training scripts that for generating the checkpoints.
+ - `dft`: Contains script to create cp2k based DFT calculations for the structures, with examples of how to apply external fields.
 
 ## Naming Conventions
 
