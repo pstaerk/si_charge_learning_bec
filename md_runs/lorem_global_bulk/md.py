@@ -1,0 +1,567 @@
+import yaml
+from marathon.io import read_yaml
+
+md_settings = read_yaml("md_settings.yaml")
+checkpoint = md_settings['io_definitions']['model_checkpoint']
+model_definitions = md_settings['io_definitions']['model_definition']
+import sys
+import pathlib
+
+from batching import get_batch
+from transforms import ToSample as ToSampleLoremII, SetUpEwald
+
+cutoff = 5.
+to_sample_lorem_ii = ToSampleLoremII(cutoff=cutoff,
+                                     forces=False, energy=False,
+                                     stress=False, apt=False)
+batch_style = "batch_shape"
+
+valid_samples = []
+
+from marathon.extra.hermes.pain import Record, RecordMetadata
+
+# Remove this line - batcher will be created inside Calculator.setup()
+# batcher = get_batcher()
+prepare_ewald_lorem_ii = SetUpEwald(lr_wavelength=cutoff / 8, smearing=cutoff / 4)
+
+# go from relative to absolute path
+model_definitions = pathlib.Path(model_definitions).resolve()
+if str(model_definitions) not in sys.path:
+    sys.path.append(str(model_definitions))
+from ase.io import read, write
+from ase.md.bussi import Bussi
+from ase import units
+from ase.io.trajectory import Trajectory
+from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
+from rich.progress import track
+import numpy as np
+from pathlib import Path
+import glob
+
+import numpy as np
+import jax
+import jax.numpy as jnp
+
+jax.config.update("jax_default_matmul_precision", "highest")
+
+from ase.calculators.abc import GetPropertiesMixin
+from ase.calculators.calculator import PropertyNotImplementedError, compare_atoms
+
+from marathon import comms
+from marathon.data.batching import next_multiple
+
+
+def z_i_pbc(batch, params, q_function):
+    mask = batch.unit_cell_mask
+    to_replicate = batch.to_replicate_idx
+    nr_nodes = batch.unfolded_nodes.shape[0]
+
+    def calc_q_sc_sum(batch, params, mask):
+        rijs = (
+            batch.unfolded_positions[batch.unfolded_others]
+            - batch.unfolded_positions[batch.unfolded_centers]
+        )
+        qs = q_function(batch, params, rijs)
+        qs *= mask
+        return jnp.sum(qs), qs
+
+    # gradient of sum_j q_j wrt. r_i,beta
+    d_sumq_drib, qs = jax.grad(calc_q_sc_sum, allow_int=True, has_aux=True, argnums=0)(
+        batch, params, mask
+    )
+
+    # outer product of all positions with the corresponding gradient
+    outer_product = (
+        batch.unfolded_positions[:, :, None]
+        * d_sumq_drib.unfolded_positions[:, None, :]
+    )
+
+    # sum of replica positions * gradient
+    grad_q_sc_sum = jax.ops.segment_sum(
+        outer_product,
+        to_replicate,
+        num_segments=nr_nodes,
+    )
+
+    # For the Barycenter calculation, we use positions which are not in the AD
+    # graph in order to only be able to calc the derivative of the sum.
+    stopgrad_positions = jax.lax.stop_gradient(batch.unfolded_positions)
+
+    def z_alpha(alpha):
+        def barycenter(batch, params, mask):
+            rijs = (
+                batch.unfolded_positions[batch.unfolded_others]
+                - batch.unfolded_positions[batch.unfolded_centers]
+            )
+            qs = q_function(batch, params, rijs)
+            qs *= mask  # Only restrict to simulation cell atoms, no ghosts
+
+            return jnp.sum(qs[..., None] * stopgrad_positions, axis=0)[alpha]
+
+        z_alpha = jax.grad(
+            lambda b: barycenter(b, params, mask), allow_int=True, argnums=0
+        )(batch).unfolded_positions
+
+        z_alpha = jax.ops.segment_sum(
+            z_alpha,
+            to_replicate,
+            num_segments=nr_nodes,
+        )
+        return z_alpha
+
+    s1 = jax.vmap(lambda a: z_alpha(a))(jnp.arange(3)).transpose((1, 0, 2))
+
+    Z = s1 - grad_q_sc_sum
+
+    # add q_i * delta_alpha_beta
+    Z = Z + jnp.einsum("i,ab->iab", qs, jnp.eye(3))
+    return Z
+
+def calc_q(params, batch, rijs, apply_fn):
+    _, q = apply_fn(
+        params,
+        rijs,
+        batch.unfolded_centers,
+        batch.unfolded_others,
+        batch.unfolded_nodes,
+        batch.unfolded_edge_mask,
+        batch.unfolded_node_mask,
+        batch.positions,
+        batch.cell,
+        batch.k_grid,
+        batch.smearing,
+        batch.full_edges,
+        batch.full_centers,
+        batch.full_others,
+        batch.full_edge_mask,
+    )
+    # print(f'{q.shape=}')
+    # jax.debug.print("q[:9] = {}", q[:9])
+    return q[...,0]
+
+
+def calc_apt(params, batch, calc_q):
+    return z_i_pbc(batch, params, calc_q)
+
+
+class Calculator(GetPropertiesMixin):
+    # ase/vibes compatibility. not used!
+    name = "marathon"
+    parameters = {}
+
+    def todict(self):
+        return self.parameters
+
+    implemented_properties = [
+        "energy",
+        "forces",
+        "stress",
+        "charges",
+        "apt",
+    ]
+
+    def __init__(
+        self,
+        pred_fn,
+        species_weights,
+        params,
+        cutoff,
+        calc_apt_fn,
+        to_sample,
+        prepare_ewald,
+        atoms=None,
+        stress=False,
+        add_offset=True,
+        next_multiple=16,
+        field=None,
+    ):
+        self.params = params
+        self.cutoff = cutoff
+        self.add_offset = add_offset
+        self.next_multiple = next_multiple
+        self.field = field
+
+        if not stress:
+            self.implemented_properties = ["energy", "forces", "charges",
+                                           "apt"]
+
+        predict_fn = lambda params, batch: pred_fn(
+            params, batch,
+            )
+
+        self.predict_fn = jax.jit(predict_fn)
+        self.calc_apt = jax.jit(calc_apt_fn)  # <-- Use calc_apt_fn parameter, not global calc_apt
+        self.species_weights = species_weights
+
+        self.atoms = None
+        self.batch = None
+        self.results = {}
+        if atoms is not None:
+            self.setup(atoms)
+
+        self.batcher = None
+        self.num_edges = 0
+        self.num_nodes = 0
+
+        # Use the passed to_sample and prepare_ewald
+        self.to_sample = to_sample
+        self.prepare_ewald = prepare_ewald
+
+    @classmethod
+    def from_checkpoint(
+        cls,
+        folder,
+        to_sample,  # Add to_sample as a parameter
+        prepare_ewald,  # Add prepare_ewald as a parameter
+        **kwargs,
+    ):
+        from pathlib import Path
+
+        from marathon.io import from_dict, read_yaml
+
+        folder = Path(folder)
+
+        model = from_dict(read_yaml(folder / "model/model.yaml"))
+
+        _ = model.init(jax.random.key(1), *model.dummy_inputs())
+
+        baseline = read_yaml(folder / "model/baseline.yaml")
+        species_to_weight = baseline["elemental"]
+
+        from marathon.emit.checkpoint import read_msgpack
+
+        params = read_msgpack(folder / "model/model.msgpack")
+
+        electric_field = (jnp.array(kwargs['field'], dtype=jnp.float32)
+                          if kwargs['field'] is not None else None)
+
+        predict_fn = lambda params, batch: model.predict(
+            params,
+            batch,
+            electric_field=electric_field,
+            excess_charge_neutralization=True,
+        )
+   
+        # Create a fully reduced calc_apt_fn that only takes params and batch
+        def calc_apt_fn_reduced(p, b):
+            # Create the calc_q function with model.apply bound
+            calc_q_fn = lambda params, batch, rijs: calc_q(batch, params,
+                                                           rijs, model.apply)
+            # Now call calc_apt with all three arguments
+            return calc_apt(p, b, calc_q_fn)
+
+        return cls(predict_fn, species_to_weight, params, model.cutoff,
+                   calc_apt_fn=calc_apt_fn_reduced,
+                   to_sample=to_sample,
+                   prepare_ewald=prepare_ewald,
+                   **kwargs)
+
+    def update(self, atoms):
+        changes = compare_atoms(self.atoms, atoms)
+
+        if len(changes) > 0:
+            self.results = {}
+            self.atoms = atoms.copy()
+            self.setup(atoms)
+
+    def setup(self, atoms):
+        sample = self.to_sample.map(atoms)
+
+        n_edges = len(sample.graph.unfolded_centers)
+        n_nodes = len(sample.graph.unfolded_nodes)
+
+        if n_edges + 1 > self.num_edges or n_nodes + 1 > self.num_nodes:
+            num_edges = next_multiple(n_edges, self.next_multiple)
+            num_nodes = next_multiple(n_nodes, self.next_multiple)
+
+            self.batcher = lambda x: get_batch(
+                [x], num_nodes, num_edges, [], num_graphs=2
+            )
+            
+
+        self.batch = self.prepare_ewald.map(self.batcher(sample))
+
+    def calculate(
+        self,
+        atoms=None,
+        properties=None,
+        system_changes=None,
+        **kwargs,
+    ):
+        self.update(atoms)
+
+        results = self.predict_fn(self.params, self.batch)
+
+        z = self.calc_apt(self.params, self.batch)
+
+        actual_results = {}
+        for key in self.implemented_properties:
+            if key == "energy":
+                actual_results[key] = float(results[key][self.batch.graph_mask].squeeze())
+            elif key == "forces":
+                actual_results[key] = np.array(results[key][self.batch.node_mask].reshape(-1, 3))
+            elif key == "charges":
+                actual_results[key] = np.array(results[key][self.batch.node_mask])
+            elif key == "stress":
+                raise KeyError
+
+        actual_results['apt'] = np.array(z.reshape(-1, 3, 3)[self.batch.node_mask])
+
+        if self.add_offset:
+            energy_offset = np.sum(
+                [self.species_weights[Z] for Z in atoms.get_atomic_numbers()]
+            )
+            actual_results["energy"] += energy_offset
+
+        self.results = actual_results
+        return actual_results
+
+    def get_property(self, name, atoms=None, allow_calculation=True):
+        if name not in self.implemented_properties:
+            raise PropertyNotImplementedError(f"{name} property not implemented")
+
+        self.update(atoms)
+
+        if name not in self.results:
+            if not allow_calculation:
+                return None
+            self.calculate(atoms=atoms)
+
+        if name not in self.results:
+            # For some reason the calculator was not able to do what we want,
+            # and that is OK.
+            raise PropertyNotImplementedError(
+                f"{name} property not present in results!"
+            )
+
+        result = self.results[name]
+        if isinstance(result, np.ndarray):
+            result = result.copy()
+        return result
+
+    def get_potential_energy(self, atoms=None):
+        return self.get_property(name="energy", atoms=atoms)
+
+class BinaryPropertyWriter:
+    def __init__(self, filename, get_property_func, atoms):
+        self.fh = open(filename, "ab")  # append in binary mode
+        self.get_property = get_property_func
+        self.atoms = atoms
+
+    def __call__(self):
+        props = self.get_property(self.atoms).astype(np.float32)  # shape (n_atoms, 3, 3)
+        props.tofile(self.fh)  # write raw binary, no header
+
+    def close(self):
+        self.fh.close()
+
+
+def get_apt(atoms):
+    apts = atoms.calc.results['apt']
+    return apts
+
+
+def get_dipole_moment_derivative(atoms):
+    """
+    Calculate the time derivative of the dipole moment.
+    
+    dM/dt = sum_i (Z_i * v_i)
+    where Z_i is the atomic polar tensor and v_i is the velocity
+    
+    Returns:
+    --------
+    dM_dt : np.ndarray
+        Time derivative of dipole moment, shape (3,)
+    """
+    apts = atoms.calc.results['apt']  # shape (n_atoms, 3, 3)
+    velocities = atoms.get_velocities()  # shape (n_atoms, 3)
+    
+    # Matrix-vector multiplication: Z_i @ v_i for each atom, then sum
+    dM_dt = np.einsum('ijk,ik->j', apts, velocities)
+    
+    return dM_dt
+
+
+def find_restart_configuration(out_dir, out_path):
+    """
+    Find the latest checkpoint to restart from.
+    
+    Returns:
+    --------
+    restart_atoms : ase.Atoms or None
+        Atoms object to restart from, or None if no restart
+    checkpoint_number : int
+        The checkpoint number to continue from (0 if fresh start)
+    """
+    out_dir = Path(out_dir)
+    
+    # Look for existing trajectories with pattern: traj.traj, traj_1.traj, traj_2.traj, etc.
+    base_name = out_path.stem  # e.g., 'traj'
+    extension = out_path.suffix  # e.g., '.traj'
+    
+    # Find all matching trajectory files
+    existing_trajs = sorted(out_dir.glob(f"{base_name}*.traj"))
+    existing_trajs = [t for t in existing_trajs if t != out_path or t.exists()]
+    
+    if not existing_trajs:
+        return None, 0
+    
+    # Extract checkpoint numbers
+    checkpoint_numbers = []
+    for traj_path in existing_trajs:
+        name = traj_path.stem
+        if name == base_name:
+            checkpoint_numbers.append(0)
+        else:
+            # Extract number from pattern like 'traj_1', 'traj_2', etc.
+            try:
+                num = int(name.split('_')[-1])
+                checkpoint_numbers.append(num)
+            except (ValueError, IndexError):
+                continue
+    
+    if not checkpoint_numbers:
+        return None, 0
+    
+    # Get the highest checkpoint number
+    max_checkpoint = max(checkpoint_numbers)
+    
+    # Determine the corresponding trajectory file
+    if max_checkpoint == 0:
+        latest_traj = out_dir / f"{base_name}{extension}"
+    else:
+        latest_traj = out_dir / f"{base_name}_{max_checkpoint}{extension}"
+    
+    print(f"[green]Found existing trajectory: {latest_traj}[/green]")
+    print(f"[green]Restarting from checkpoint {max_checkpoint}[/green]")
+    
+    # Read the last frame
+    atoms = read(latest_traj, index=-1)
+    
+    return atoms, max_checkpoint
+
+
+io_definitions = md_settings['io_definitions']
+md_definitions = md_settings['md_definitions']
+
+out_path = Path(io_definitions.get('out_path', './traj.traj'))
+out_dir = out_path.parent
+
+# Check for restart
+restart_atoms, checkpoint_number = find_restart_configuration(out_dir, out_path)
+
+if restart_atoms is not None:
+    # Restarting from checkpoint
+    atoms_start = restart_atoms
+    new_checkpoint_number = checkpoint_number + 1
+    
+    # Create new output paths
+    base_name = out_path.stem
+    extension = out_path.suffix
+    out_path = out_dir / f"{base_name}_{new_checkpoint_number}{extension}"
+    apt_output = out_dir / f"apts_{new_checkpoint_number}.bin"
+    dipole_output = out_dir / f"dipole_deriv_{new_checkpoint_number}.bin"
+    
+    print(f"[yellow]Restarting simulation from checkpoint {checkpoint_number}[/yellow]")
+    print(f"[yellow]New outputs will be saved with suffix _{new_checkpoint_number}[/yellow]")
+else:
+    # Fresh start
+    start_index = io_definitions.get('start_index', 0)
+    print(f"Using start index {start_index} for reading the initial structure.")
+    start_struct = io_definitions.get('start_struct', 'initial_structure.traj')
+    
+    atoms_start = read(start_struct, index=start_index)
+    new_checkpoint_number = 0
+    apt_output = out_dir / "apts.bin"
+    dipole_output = out_dir / "dipole_deriv.bin"
+    
+    print("[green]Starting fresh simulation[/green]")
+
+model_dir = io_definitions.get('model_checkpoint', 'model_dir')
+field_vector = md_definitions.get('field_vector', [0.0, 0.0, 0.0])
+
+atoms_start.info['electric_field'] = np.array(field_vector)
+calc = Calculator.from_checkpoint(
+    model_dir, 
+    to_sample=to_sample_lorem_ii,
+    prepare_ewald=prepare_ewald_lorem_ii,
+    field=field_vector
+)
+
+timestep = md_definitions.get('timestep', 0.5) * units.fs
+temperature = md_definitions.get('temperature', 300)
+thermostat_tau = md_definitions.get('thermostat_tau', 100) * units.fs
+total_steps = md_definitions.get('total_steps', 10000)
+steps_per_frame = md_definitions.get('steps_per_frame', 2000)
+
+from rich.panel import Panel
+from rich.table import Table
+from rich.console import Console
+
+# Create a table for the MD parameters
+table = Table.grid(expand=True, padding=(0, 1))
+table.add_column(justify="right", style="cyan", no_wrap=True)
+table.add_column(justify="left", style="white")
+
+# Add rows to the table
+table.add_row("Checkpoint Number:", f"{new_checkpoint_number}")
+table.add_row("Timestep:", f"{timestep:.2f} internal units")
+table.add_row("Temperature:", f"{temperature} K")
+table.add_row("Thermostat Tau:", f"{thermostat_tau:.2f} internal units")
+table.add_row("Total Steps:", f"{total_steps}")
+table.add_row("Steps per Frame:", f"{steps_per_frame}")
+table.add_row("Output Path:", f"'{out_path}'")
+table.add_row("APT Output:", f"'{apt_output}'")
+table.add_row("Dipole Deriv Output:", f"'{dipole_output}'")
+table.add_row("Electric Field:", f"{field_vector} V/Å")
+
+# Create a panel with the table
+panel = Panel(
+    table,
+    title="[bold magenta]MD Simulation Parameters[/bold magenta]",
+    border_style="green",
+    expand=False
+)
+
+# Print the panel
+console = Console()
+console.print(panel)
+
+# Initialize APT arrays if not present
+if 'apt' not in atoms_start.arrays:
+    atoms_start.arrays['apt'] = np.zeros((len(atoms_start), 3, 3))
+if 'apt_charge' not in atoms_start.arrays:
+    atoms_start.arrays['apt_charge'] = np.zeros((len(atoms_start)))
+
+atoms = atoms_start.copy()
+atoms.calc = calc
+
+# Only set velocities if starting fresh (not restarting)
+if restart_atoms is None:
+    MaxwellBoltzmannDistribution(atoms, temperature_K=temperature)
+
+dyn = Bussi(atoms, timestep, temperature, thermostat_tau)
+
+workdir = out_dir
+traj = Trajectory(out_path, 'w', atoms,
+                  properties=['energy', 'forces', 'charges', 'apt'])
+N_per_step = steps_per_frame
+dyn.attach(traj.write, interval=N_per_step)
+
+N_steps = total_steps
+
+apt_writer = BinaryPropertyWriter(str(apt_output), get_apt, atoms)
+dyn.attach(apt_writer, interval=N_per_step)
+
+# Add dipole moment derivative writer
+dipole_deriv_writer = BinaryPropertyWriter(str(dipole_output), get_dipole_moment_derivative, atoms)
+dyn.attach(dipole_deriv_writer, interval=N_per_step)
+
+dyn.run(N_per_step*N_steps)
+
+traj.close()
+apt_writer.close()
+dipole_deriv_writer.close()
+
+print(f"[green]Simulation completed successfully![/green]")
+print(f"[green]Outputs saved to checkpoint {new_checkpoint_number}[/green]")
