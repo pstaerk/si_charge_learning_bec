@@ -6,3 +6,5 @@ ase
 grain
 git+https://github.com/lab-cosmo/jax-pme.git
 git+https://github.com/sirmarcel/marathon
+maicos
+git+https://github.com/maicos-devel/spectrakit.git
