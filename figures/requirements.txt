@@ -1,0 +1,6 @@
+ase
+chemiscope
+matplotlib
+mpltex @ git+https://github.com/PicoCentauri/mpltex
+numpy
+PySnips @ git+https://github.com/PicoCentauri/PySnips
