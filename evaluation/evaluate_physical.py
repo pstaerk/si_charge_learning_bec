@@ -83,7 +83,7 @@ class ModelEvaluator:
         if str(model_definitions) not in sys.path:
             sys.path.append(str(model_definitions))
 
-        from myrto.engine import from_dict, read_yaml
+        from marathon.io import from_dict, read_yaml
         from marathon.emit.checkpoint import read_msgpack
         from predict import get_predict_fn  # Import get_predict_fn
 

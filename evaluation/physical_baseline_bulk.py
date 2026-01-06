@@ -28,7 +28,7 @@ def load_model(folder, model_definitions, predict_i=True, **kwargs):
         sys.path.append(str(model_definitions))
 
     from pathlib import Path
-    from myrto.engine import from_dict, read_yaml
+    from marathon.io import from_dict, read_yaml
 
     folder = Path(folder)
 
