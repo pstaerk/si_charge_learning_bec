@@ -206,6 +206,7 @@ def tmp():
     ax_top.spines["bottom"].set_visible(False)
     ax_bottom.spines["top"].set_visible(False)
     ax_top.tick_params(labelbottom=False, bottom=False)
+    
 
     # Add break indicators
     d = 0.008
@@ -230,6 +231,8 @@ def tmp():
     ax[1].set_xticks(x + bar_width * (total_bars - 1) / 2)
     ax[1].set_xticklabels([])
 
+    ax_top.set_xticks(x + bar_width * (total_bars - 1) / 2)
+
     ax[0].set_ylim(0, 2.2)
     ax[1].set_ylim(0, 59)
     add_subplotlabels(fig, [ax[0], ax[1], ax_top], ["A", "B", "C"])
@@ -248,7 +251,7 @@ def tmp():
     fig.tight_layout()
 
     fig.savefig(
-        "TeX/figures/errors.pdf",
+        "figures/errors.pdf",
         dpi=300,
         transparent=True,
         bbox_inches="tight",

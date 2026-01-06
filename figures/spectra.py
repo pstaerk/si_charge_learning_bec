@@ -51,41 +51,26 @@ def process_spectrum(spectra_dict, fmin=1e-3, fmax=2e2, num=300):
 
 bulk_exp = np.loadtxt("data/combined_exp_susc_300K.txt")
 
-ir_path = "data/spectra_physical"
+physical_model = False
 
-bulk_uncoupled = dict(
-    np.load(f"{ir_path}/spectrum_ph_i_bulk_from_mdot.npz", allow_pickle=True)
-)
-book_uncoupled = dict(
-    np.load(f"{ir_path}/combined_spectrum_ph_i_hex_book_from_mdot.npz", allow_pickle=True)
-)
-cage_uncoupled = dict(
-    np.load(f"{ir_path}/combined_spectrum_ph_i_hex_cage_from_mdot.npz", allow_pickle=True)
-)
+if physical_model:
+    path = "data/spectra_physical/spectrum_physical_"
+    fname_suffix = "_physical"
+else:
+    path = "data/spectra_lorem/spectrum_lorem_"
+    fname_suffix = "_lorem"
 
-bulk_coupled_global = dict(
-    np.load(f"{ir_path}/spectrum_ph_ii_global_bulk_from_mdot.npz", allow_pickle=True)
-)
-book_coupled_global = dict(
-    np.load(
-        f"{ir_path}/combined_spectrum_ph_global_hex_book_from_mdot.npz", allow_pickle=True
-    )
-)
-cage_coupled_global = dict(
-    np.load(
-        f"{ir_path}/combined_spectrum_ph_global_hex_cage_from_mdot.npz", allow_pickle=True
-    )
-)
+bulk_uncoupled = dict(np.load(f"{path}uncoupled_bulk.npz", allow_pickle=True))
+book_uncoupled = dict(np.load(f"{path}uncoupled_book.npz", allow_pickle=True))
+cage_uncoupled = dict(np.load(f"{path}uncoupled_cage.npz", allow_pickle=True))
 
-bulk_coupled_local = dict(
-    np.load(f"{ir_path}/spectrum_ph_ii_bulk_from_mdot.npz", allow_pickle=True)
-)
-book_coupled_local = dict(
-    np.load(f"{ir_path}/combined_spectrum_ph_ii_hex_book_from_mdot.npz", allow_pickle=True)
-)
-cage_coupled_local = dict(
-    np.load(f"{ir_path}/combined_spectrum_ph_ii_hex_cage_from_mdot.npz", allow_pickle=True)
-)
+bulk_global = dict(np.load(f"{path}global_bulk.npz", allow_pickle=True))
+book_global = dict(np.load(f"{path}global_book.npz", allow_pickle=True))
+cage_global = dict(np.load(f"{path}global_cage.npz", allow_pickle=True))
+
+bulk_local = dict(np.load(f"{path}local_bulk.npz", allow_pickle=True))
+book_local = dict(np.load(f"{path}local_book.npz", allow_pickle=True))
+cage_local = dict(np.load(f"{path}local_cage.npz", allow_pickle=True))
 
 
 @mpltex.acs_decorator
@@ -100,41 +85,14 @@ def plot_scrum():
     fig.set_figwidth(3.5)
 
     labels = [r"Uncoupl.", r"Coupl. $\gamma$", r"Coupl. $\gamma_i$"]
-    for i, spectra in enumerate(
-        [bulk_uncoupled, bulk_coupled_global, bulk_coupled_local]
-    ):
+    for i, spectra in enumerate([bulk_uncoupled, bulk_global, bulk_local]):
         ax[0].plot(spectra["nu"], spectra["susc_imag"], label=labels[i])
-        ax[0].fill_between(
-            spectra["nu"],
-            (spectra["susc_imag"] - spectra["dsusc_imag"]),
-            (spectra["susc_imag"] + spectra["dsusc_imag"]),
-            color=f"C{i}",
-            alpha=0.3,
-        )
 
-    for i, spectra in enumerate(
-        [book_uncoupled, book_coupled_global, book_coupled_local]
-    ):
+    for i, spectra in enumerate([book_uncoupled, book_global, book_local]):
         ax[1].plot(spectra["nu"], spectra["mean_susc_imag"], label=labels[i])
-        ax[1].fill_between(
-            spectra["nu"],
-            (spectra["mean_susc_imag"] - spectra["stderr_susc_imag"]),
-            (spectra["mean_susc_imag"] + spectra["stderr_susc_imag"]),
-            color=f"C{i}",
-            alpha=0.3,
-        )
 
-    for i, spectra in enumerate(
-        [cage_uncoupled, cage_coupled_global, cage_coupled_local]
-    ):
+    for i, spectra in enumerate([cage_uncoupled, cage_global, cage_local]):
         ax[2].plot(spectra["nu"], spectra["mean_susc_imag"], label=labels[i])
-        ax[2].fill_between(
-            spectra["nu"],
-            (spectra["mean_susc_imag"] - spectra["stderr_susc_imag"]),
-            (spectra["mean_susc_imag"] + spectra["stderr_susc_imag"]),
-            color=f"C{i}",
-            alpha=0.3,
-        )
 
     ax[0].plot(bulk_exp[:, 0], bulk_exp[:, 3], "k", ls="--", label="Experiment")
     ax[-1].set_xlabel(r"$\omega$ [Thz]")
@@ -165,7 +123,7 @@ def plot_scrum():
     fig.align_labels()
 
     fig.savefig(
-        "figures/dielectric_spectrum.pdf",
+        f"figures/dielectric_spectrum{fname_suffix}.pdf",
         dpi=300,
         transparent=True,
         bbox_inches="tight",
@@ -173,4 +131,3 @@ def plot_scrum():
 
 
 plot_scrum()
-plt.show()

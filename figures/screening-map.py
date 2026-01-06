@@ -64,7 +64,7 @@ settings = {
 }
 
 chemiscope.write_input(
-    "figures/clusters.json.gz",
+    "figures/clusters_val.chemiscope.json.gz",
     frames=clusters,
     properties={
         "𝛄_i physical": screen_physical_clusters,
