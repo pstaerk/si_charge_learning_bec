@@ -28,7 +28,7 @@ def from_path(path, class_name, **kwargs):
 
 
 if __name__ == '__main__':
-    from myrto.engine import read_yaml
+    from marathon.io import read_yaml
     from pathlib import Path
 
     settings = read_yaml("settings.yaml")
@@ -128,7 +128,7 @@ if __name__ == '__main__':
     key, init_key = jax.random.split(key)
 
     # -- model --
-    from myrto.engine import from_dict, read_yaml
+    from marathon.io import from_dict, read_yaml
 
     model_config = read_yaml("model.yaml")
     assert "model" in model_config
@@ -506,7 +506,7 @@ if __name__ == '__main__':
             comms.talk(f"restored step {state['epoch']}")
 
             # try to catch the most obvious error: editing the model config between restarts
-            from myrto.engine.serialize import to_dict
+            from marathon.io import to_dict
 
             assert to_dict(new_model) == to_dict(model)
 
@@ -517,7 +517,7 @@ if __name__ == '__main__':
     opt_state = state["opt_state"]
 
     # -- loggers --
-    from myrto.engine import to_dict
+    from marathon import to_dict
 
     from marathon.emit import Txt
 
