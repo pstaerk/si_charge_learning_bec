@@ -38,7 +38,6 @@ def plot_scrum():
     fig, ax = plt.subplots(3, 2, sharey="row")
 
     fig.set_figheight(1.8 * fig.get_figheight())
-    #fig.set_figwidth(7.0)
 
     xmin_left, xmax_left = 20, 65
     xmin_right, xmax_right = 85, 125
@@ -46,14 +45,14 @@ def plot_scrum():
     for row in range(3):
         ax[row, 0].set_xlim(xmin_left, xmax_left)
         ax[row, 1].set_xlim(xmin_right, xmax_right)
+        ax[row, 1].tick_params(labelleft=False)
+
         ax[row, 0].minorticks_on()
         ax[row, 1].minorticks_on()
+
         if row > 0:
-            # ax[row, 0].set_yscale("log")
-            # ax[row, 1].set_yscale("log")
-            ax[row, 0].set_ylim(-0.01, 0.17)
-        # hide redundant y-axis on right panels
-        ax[row, 1].tick_params(labelleft=False)
+            ax[row, 0].set_ylim(-0.005, 0.065)
+
 
     # BULK
     labels = [r"Uncoupl.", r"Coupl. $\gamma$", r"Coupl. $\gamma_i$", r"fixed"]
@@ -73,8 +72,8 @@ def plot_scrum():
             bulk_exp[:, 0], exp_scale * bulk_exp[:, 3], "k", ls="--", label="Experiment"
         )
 
-    ax[0, 0].set_ylim(-.2,1.85)
-    ax[0, 1].set_ylim(-0.2,1.85)
+    ax[0, 0].set_ylim(-0.2, 1.85)
+    ax[0, 1].set_ylim(-0.2, 1.85)
 
     # BOOK
     for i, spectra in enumerate([book_uncoupled, book_global, book_local, book_fixed]):
@@ -107,11 +106,12 @@ def plot_scrum():
     for col in range(2):
         ax[-1, col].tick_params(bottom=True, labelbottom=True)
 
-    ax[0,1].legend()
+    ax[0, 1].legend()
 
-    _legend_order = [3, 1, 2, 0]  # fixed, Coupl. γ, Coupl. γ_i, Uncoupl.
-    handles, lbls = ax[1,1].get_legend_handles_labels()
-    ax[1, 1].legend([handles[i] for i in _legend_order], [lbls[i] for i in _legend_order])
+    # split legend: fixed+Coupl.γ in row 1, Coupl.γ_i+Uncoupl. in row 2
+    handles, lbls = ax[1, 1].get_legend_handles_labels()
+    ax[1, 1].legend([handles[3], handles[1]], [lbls[3], lbls[1]])
+    ax[2, 1].legend([handles[2], handles[0]], [lbls[2], lbls[0]])
 
     add_subplotlabels(fig, ax.flatten(), labels=["A", "B", "C", "D", "E", "F"])
 
@@ -127,12 +127,11 @@ def plot_scrum():
 
     plt.show()
 
-if __name__ == "__main__":
 
+if __name__ == "__main__":
     bulk_exp = np.loadtxt("data/combined_exp_susc_300K.txt")
 
     for physical_model in [True]:
-
         if physical_model:
             path = "data/spectra_physical/spectrum_physical_"
             fname_suffix = "_physical"
@@ -145,9 +144,15 @@ if __name__ == "__main__":
         cage_uncoupled = dict(np.load(f"{path}uncoupled_cage.npz", allow_pickle=True))
 
         if physical_model:
-            bulk_fixed = dict(np.load(f"{path}uncoupled_fixed_bulk.npz", allow_pickle=True))
-            book_fixed = dict(np.load(f"{path}uncoupled_fixed_book.npz", allow_pickle=True))
-            cage_fixed = dict(np.load(f"{path}uncoupled_fixed_cage.npz", allow_pickle=True))
+            bulk_fixed = dict(
+                np.load(f"{path}uncoupled_fixed_bulk.npz", allow_pickle=True)
+            )
+            book_fixed = dict(
+                np.load(f"{path}uncoupled_fixed_book.npz", allow_pickle=True)
+            )
+            cage_fixed = dict(
+                np.load(f"{path}uncoupled_fixed_cage.npz", allow_pickle=True)
+            )
 
             book_fixed["susc_imag"] /= 3000
             cage_fixed["susc_imag"] /= 3000
