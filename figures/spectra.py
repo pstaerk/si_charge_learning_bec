@@ -12,7 +12,7 @@ from PySnips.plotting import add_subplotlabels
 _THZ_TO_WAVENUMBER = 1e12 / (c * 100)  # ≈ 33.356 cm⁻¹/THz
 
 # dummy spectra
-_NAN_DICT = {"nu": np.nan, "susc_imag": np.nan}
+_NAN_DICT = {"nu": np.nan*np.ones(100), "susc_imag": np.nan*np.ones(100)}
 
 
 # add second axis with wavenumbers in cm^-1
@@ -78,12 +78,18 @@ def plot_scrum():
     # BOOK
     for i, spectra in enumerate([book_uncoupled, book_global, book_local, book_fixed]):
         for col in range(2):
-            ax[1, col].plot(spectra["nu"], spectra["susc_imag"], label=labels[i])
+            try:
+                ax[1, col].plot(spectra["nu"], spectra["susc_imag"], label=labels[i])
+            except KeyError:
+                print("book", i)
 
     # CAGE
     for i, spectra in enumerate([cage_uncoupled, cage_global, cage_local, cage_fixed]):
         for col in range(2):
-            ax[2, col].plot(spectra["nu"], spectra["susc_imag"], label=labels[i])
+            try:
+                ax[2, col].plot(spectra["nu"], spectra["susc_imag"], label=labels[i])
+            except KeyError:
+                print("cage", i)
 
     for col in range(2):
         ax[-1, col].set_xlabel(r"$\omega$ [THz]")
@@ -110,8 +116,8 @@ def plot_scrum():
 
     # split legend: fixed+Coupl.γ in row 1, Coupl.γ_i+Uncoupl. in row 2
     handles, lbls = ax[1, 1].get_legend_handles_labels()
-    ax[1, 1].legend([handles[3], handles[1]], [lbls[3], lbls[1]])
-    ax[2, 1].legend([handles[2], handles[0]], [lbls[2], lbls[0]])
+    ax[1, 1].legend([handles[3], handles[1]], [lbls[3], lbls[1]], frameon=True, edgecolor="none")
+    ax[2, 1].legend([handles[2], handles[0]], [lbls[2], lbls[0]], frameon=True, edgecolor="none")
 
     add_subplotlabels(fig, ax.flatten(), labels=["A", "B", "C", "D", "E", "F"])
 
@@ -131,7 +137,7 @@ def plot_scrum():
 if __name__ == "__main__":
     bulk_exp = np.loadtxt("data/combined_exp_susc_300K.txt")
 
-    for physical_model in [True]:
+    for physical_model in [True, False]:
         if physical_model:
             path = "data/spectra_physical/spectrum_physical_"
             fname_suffix = "_physical"
@@ -142,6 +148,14 @@ if __name__ == "__main__":
         bulk_uncoupled = dict(np.load(f"{path}uncoupled_bulk.npz", allow_pickle=True))
         book_uncoupled = dict(np.load(f"{path}uncoupled_book.npz", allow_pickle=True))
         cage_uncoupled = dict(np.load(f"{path}uncoupled_cage.npz", allow_pickle=True))
+
+        bulk_global = dict(np.load(f"{path}global_bulk.npz", allow_pickle=True))
+        book_global = dict(np.load(f"{path}global_book.npz", allow_pickle=True))
+        cage_global = dict(np.load(f"{path}global_cage.npz", allow_pickle=True))
+
+        bulk_local = dict(np.load(f"{path}local_bulk.npz", allow_pickle=True))
+        book_local = dict(np.load(f"{path}local_book.npz", allow_pickle=True))
+        cage_local = dict(np.load(f"{path}local_cage.npz", allow_pickle=True))
 
         if physical_model:
             bulk_fixed = dict(
@@ -158,13 +172,14 @@ if __name__ == "__main__":
             cage_fixed["susc_imag"] /= 3000
         else:
             bulk_fixed = _NAN_DICT
+            book_fixed = _NAN_DICT
+            cage_fixed = _NAN_DICT
 
-        bulk_global = dict(np.load(f"{path}global_bulk.npz", allow_pickle=True))
-        book_global = dict(np.load(f"{path}global_book.npz", allow_pickle=True))
-        cage_global = dict(np.load(f"{path}global_cage.npz", allow_pickle=True))
-
-        bulk_local = dict(np.load(f"{path}local_bulk.npz", allow_pickle=True))
-        book_local = dict(np.load(f"{path}local_book.npz", allow_pickle=True))
-        cage_local = dict(np.load(f"{path}local_cage.npz", allow_pickle=True))
+            book_uncoupled["susc_imag"] = book_uncoupled["mean_susc_imag"]
+            cage_uncoupled["susc_imag"] = cage_uncoupled["mean_susc_imag"]
+            book_global["susc_imag"] = book_global["mean_susc_imag"]
+            cage_global["susc_imag"] = cage_global["mean_susc_imag"]
+            book_local["susc_imag"] = book_local["mean_susc_imag"]
+            cage_local["susc_imag"] = cage_local["mean_susc_imag"]
 
         plot_scrum()
