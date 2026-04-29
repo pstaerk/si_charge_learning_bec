@@ -167,9 +167,6 @@ if __name__ == "__main__":
             cage_fixed = dict(
                 np.load(f"{path}uncoupled_fixed_cage.npz", allow_pickle=True)
             )
-
-            book_fixed["susc_imag"] /= 3000
-            cage_fixed["susc_imag"] /= 3000
         else:
             bulk_fixed = _NAN_DICT
             book_fixed = _NAN_DICT
